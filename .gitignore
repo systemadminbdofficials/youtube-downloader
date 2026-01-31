@@ -1,0 +1,14 @@
+# .gitignore
+downloads/
+*.mp3
+*.mp4
+*.mkv
+*.webm
+*.part
+cookies.txt
+.env
+config.py
+__pycache__/
+*.pyc
+.env.local
+.vscode/
