@@ -15,6 +15,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 user_data = {}
 DOWNLOAD_FOLDER = 'downloads'
+COOKIES_FILE = os.path.join(DOWNLOAD_FOLDER, 'cookies.txt')  # Cookie file path
 
 # ==========================================
 # Background Tasks (Auto Cleanup)
@@ -34,6 +35,10 @@ def clean_old_files():
                 for filename in os.listdir(DOWNLOAD_FOLDER):
                     file_path = os.path.join(DOWNLOAD_FOLDER, filename)
                     
+                    # Cookie file রিমুভ করবেন না
+                    if filename == 'cookies.txt':
+                        continue
+                        
                     if os.path.isfile(file_path):
                         file_age = current_time - os.path.getmtime(file_path)
                         if file_age > retention_period:
@@ -115,6 +120,13 @@ def download_and_send(chat_id, url, is_audio):
             'no_warnings': True,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
+        
+        # Cookie file যোগ করুন যদি থাকে
+        if os.path.exists(COOKIES_FILE):
+            ydl_opts['cookiefile'] = COOKIES_FILE
+            print(f"[System] Using cookies from: {COOKIES_FILE}")
+        else:
+            print("[System] No cookies file found. Downloading without cookies.")
 
         if is_audio:
             ydl_opts.update({
@@ -158,15 +170,51 @@ def download_and_send(chat_id, url, is_audio):
         if os.path.exists(file_path):
             os.remove(file_path)
 
+    except yt_dlp.utils.DownloadError as e:
+        if "Sign in to confirm you're not a bot" in str(e):
+            error_msg = (
+                "⚠️ YouTube requires authentication.\n\n"
+                "The bot administrator needs to add cookies. "
+                "Please notify the bot owner."
+            )
+        else:
+            error_msg = f"Download Error: {str(e)[:200]}"
+        bot.send_message(chat_id, error_msg)
+        
     except Exception as e:
-        bot.send_message(chat_id, f"Error: {str(e)}")
+        bot.send_message(chat_id, f"Error: {str(e)[:200]}")
+        
+    finally:
         # Clean up partial files on error
         if file_path and os.path.exists(file_path):
-             os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except:
+                pass
+
+# ==========================================
+# Cookie management command
+# ==========================================
+
+@bot.message_handler(commands=['cookie_status'])
+def cookie_status(message):
+    """Check if cookies file exists"""
+    if os.path.exists(COOKIES_FILE):
+        file_size = os.path.getsize(COOKIES_FILE)
+        bot.reply_to(message, f"✅ Cookies file exists ({file_size} bytes)")
+    else:
+        bot.reply_to(message, "❌ No cookies file found. Some videos may require authentication.")
 
 # ==========================================
 # Entry Point
 # ==========================================
 if __name__ == "__main__":
     print("Bot is running...")
+    
+    # Check cookies file on startup
+    if os.path.exists(COOKIES_FILE):
+        print(f"[System] Cookies file found: {COOKIES_FILE}")
+    else:
+        print("[System] Warning: No cookies.txt file found. Some videos may fail to download.")
+
     bot.infinity_polling()
